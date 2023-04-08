@@ -38,3 +38,4 @@ stack-data==0.6.2
 tornado==6.2
 traitlets==5.9.0
 wcwidth==0.2.6
+scipy==1.9.1
