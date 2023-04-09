@@ -1,0 +1,10 @@
+name: 'roi-classification'
+train_batch_size: 128
+val_batch_size: 128
+test_batch_size: 128
+predict_batch_size: 128
+train_dir: 'data/...'
+val_dir: 'data/...'
+test_dir: 'data/...'
+predict_dir: 'data/...'
+# TODO add hparams for data transformations
