@@ -97,9 +97,15 @@ class ROIClassificationTask(pl.LightningModule):
         self.log_dict(metrics, on_epoch=True)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(
+        # optimizer = torch.optim.AdamW(
+        #     self.parameters(),
+        #     lr=self.hparams.task.learning_rate,
+        #     weight_decay=self.hparams.task.weight_decay
+        # )
+        optimizer = torch.optim.SGD(
             self.parameters(),
             lr=self.hparams.task.learning_rate,
-            weight_decay=self.hparams.task.weight_decay
+            weight_decay=self.hparams.task.weight_decay,
+            momentum=0.9
         )
         return optimizer

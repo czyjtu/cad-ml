@@ -1,7 +1,7 @@
 name: 'roi-classification'
 accelerator: gpu
 devices: 1
-positive_class_weight: 10.0
+positive_class_weight: 100.0
 learning_rate: 0.001
 weight_decay: 0.01
 max_epochs: 50
