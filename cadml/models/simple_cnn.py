@@ -23,8 +23,7 @@ class SimpleCNN(nn.Module):
         )
 
         self.head = nn.Sequential(
-            nn.Linear(640, 1),
-            nn.Sigmoid()
+            nn.Linear(640, 1)
         )
 
     def forward(self, X: TensorType["batch_size", "channels", "height", "width"]) -> TensorType["batch_size"]:

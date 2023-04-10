@@ -6,6 +6,7 @@ from omegaconf import DictConfig
 
 import torch
 from torch import nn
+from torch.nn import functional as F
 from torchtyping import TensorType
 
 import pytorch_lightning as pl
@@ -27,8 +28,8 @@ class ROIClassificationTask(pl.LightningModule):
 
         self.model = model
 
-        self.loss_weights = torch.tensor([cfg.task.zero_class_weight, 1.0])
-        self.loss = nn.CrossEntropyLoss(self.loss_weights)
+        self.loss_weights = torch.tensor([cfg.task.positive_class_weight])
+        self.loss = nn.BCEWithLogitsLoss(pos_weight=self.loss_weights)
 
     def common_step(
             self,
@@ -40,9 +41,9 @@ class ROIClassificationTask(pl.LightningModule):
         """
 
         X, gold = batch
-        pred = self.model(X)
-        loss = self.loss(pred, gold)
-        return pred, gold, loss
+        pred_logits = self.model(X)
+        loss = self.loss(pred_logits, gold.unsqueeze(1).float())
+        return torch.sigmoid(pred_logits), gold, loss
 
     def training_step(self, batch, batch_idx):
         pred, gold, loss = self.common_step(batch)
@@ -79,17 +80,18 @@ class ROIClassificationTask(pl.LightningModule):
         else:
             outputs = validation_step_outputs
 
-        preds_logits: torch.Tensor = torch.tensor([pred for step_output in outputs for pred in step_output['pred']])
-        preds: torch.Tensor = torch.where(preds_logits >= 0.5, 1, 0)  # TODO move threshold to the hparams
+        preds_prob: torch.Tensor = torch.tensor([pred for step_output in outputs for pred in step_output['pred']])
+        preds: torch.Tensor = torch.where(preds_prob >= self.hparams.task.decision_threshold, 1, 0)
         golds: torch.Tensor = torch.tensor([gold for step_output in outputs for gold in step_output['gold']])
 
         preds_numpy = preds.cpu().numpy()
         golds_numpy = golds.cpu().numpy()
 
         # FIXME remove this debug after works alright
+        rank_zero_info('')
         rank_zero_info(f'tp: {np.sum(np.where(golds_numpy != 0, preds_numpy == golds_numpy, False))}')
         rank_zero_info(f'nonzero count:, {np.count_nonzero(preds_numpy)}')
-        rank_zero_info(f'preds_logits: {preds_logits[0]}')
+        rank_zero_info(f'preds_prob: {preds_prob[0]}')
 
         metrics = calculate_metrics(preds_numpy, golds_numpy)
         self.log_dict(metrics, on_epoch=True)

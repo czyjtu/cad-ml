@@ -1,14 +1,14 @@
+import random
 from typing import Optional, Iterable, Any
-from pathlib import Path
-import os
 
-import tqdm
 import numpy as np
 from omegaconf import DictConfig
 
 import torch
+from torch.utils.data import DataLoader, Dataset
+from torchtyping import TensorType
+
 import pytorch_lightning as pl
-from torch.utils.data import DataLoader, IterableDataset
 from pytorch_lightning.utilities.types import TRAIN_DATALOADERS, EVAL_DATALOADERS
 from pytorch_lightning.utilities import rank_zero_info
 
@@ -17,7 +17,7 @@ import coronaryx.algorithms as cxa
 import coronaryx.functions as cxf
 
 
-class ROIClassificationDataset(IterableDataset):
+class ROIClassificationDataset(Dataset):
     def __init__(
             self,
             dataset: list[cx.VesselBranch],
@@ -41,7 +41,6 @@ class ROIClassificationDataset(IterableDataset):
                                                             and then resize it to `size`)
         """
 
-        # TODO transformations on the original image? background tweaking? noise?
         self.original_dataset = dataset
         self.train_transform = train_transform
 
@@ -50,6 +49,7 @@ class ROIClassificationDataset(IterableDataset):
         self.transform_size_mean = transform_size_mean
         self.transform_size_std = transform_size_std
 
+        # TODO transformations on the original image? background tweaking? noise?
         self.dataset = [
             {
                 'branch_obj': branch,  # VesselBranch
@@ -72,7 +72,7 @@ class ROIClassificationDataset(IterableDataset):
             'mirrored': np.random.random() < 0.5,
         }
 
-    def _materialize_item(self, item: dict[str, Any]) -> tuple[torch.Tensor, int]:
+    def _materialize_item(self, item: dict[str, Any]) -> tuple[TensorType["in_channels", "height", "width"], int]:
         scan: cx.CoronagraphyScan = item['branch_obj'].scan
         image = np.copy(scan.scan) / 255.0  # normalizing
 
@@ -100,16 +100,17 @@ class ROIClassificationDataset(IterableDataset):
         rotated = cxf.interp_matrix(image, item['anchor'][0] + XXA, item['anchor'][1] + YYA)
         label = int(scan.in_any_roi(item['anchor']))
 
-        return torch.tensor(rotated, dtype=torch.float32), label
+        # `.unsqueeze(0)` for the `in_channels`
+        return torch.tensor(rotated, dtype=torch.float32).unsqueeze(0), label
 
-    def __iter__(self):
-        for item in self.dataset:
+    def __len__(self) -> int:
+        return len(self.dataset)
 
-            if not self.train_transform:
-                yield self._materialize_item(item)
-            else:
-                transformed = self._transform(item)
-                yield self._materialize_item(transformed)
+    def __getitem__(self, idx) -> tuple[TensorType["in_channels", "height", "width"], int]:
+        item = self.dataset[idx]
+        if self.train_transform:
+            item = self._transform(item)
+        return self._materialize_item(item)
 
 
 class ROIClassificationDataModule(pl.LightningDataModule):
@@ -121,10 +122,10 @@ class ROIClassificationDataModule(pl.LightningDataModule):
 
         self.cfg = cfg
 
-        self.train_batch_size: int = cfg.trainer.train_batch_size
-        self.val_batch_size: int = cfg.trainer.val_batch_size
-        self.test_batch_size: int = cfg.trainer.test_batch_size
-        self.predict_batch_size: int = cfg.trainer.predict_batch_size
+        self.train_batch_size: int = cfg.datamodule.train_batch_size
+        self.val_batch_size: int = cfg.datamodule.val_batch_size
+        self.test_batch_size: int = cfg.datamodule.test_batch_size
+        self.predict_batch_size: int = cfg.datamodule.predict_batch_size
 
         self.train_dataset: Optional[ROIClassificationDataset] = None
         self.val_dataset: Optional[ROIClassificationDataset] = None
@@ -136,7 +137,7 @@ class ROIClassificationDataModule(pl.LightningDataModule):
 
     def setup(self, stage: Optional[str] = None) -> None:
         if stage is None or stage == 'train':
-            dataset = cx.read_dataset(self.cfg.data.train_dir)
+            dataset = cx.read_dataset(self.cfg.datamodule.train_dir)
 
             self.train_dataset = ROIClassificationDataset([
                 branch
@@ -145,7 +146,7 @@ class ROIClassificationDataModule(pl.LightningDataModule):
             ])
 
         if stage is None or stage == 'val':
-            dataset = cx.read_dataset(self.cfg.data.val_dir)
+            dataset = cx.read_dataset(self.cfg.datamodule.val_dir)
 
             self.val_dataset = ROIClassificationDataset([
                 branch
@@ -154,7 +155,7 @@ class ROIClassificationDataModule(pl.LightningDataModule):
             ], train_transform=False)
 
         if stage is None or stage == 'test':
-            dataset = cx.read_dataset(self.cfg.data.test_dir)
+            dataset = cx.read_dataset(self.cfg.datamodule.test_dir)
 
             self.test_dataset = ROIClassificationDataset([
                 branch
@@ -163,7 +164,7 @@ class ROIClassificationDataModule(pl.LightningDataModule):
             ], train_transform=False)
 
         if stage is None or stage == 'predict':
-            dataset = cx.read_dataset(self.cfg.data.predict_dir)
+            dataset = cx.read_dataset(self.cfg.datamodule.predict_dir)
 
             self.predict_dataset = ROIClassificationDataset([
                 branch
@@ -195,4 +196,5 @@ class ROIClassificationDataModule(pl.LightningDataModule):
                           shuffle=False,
                           num_workers=3)
 
-    # TODO we need collator for sure!
+    # TODO we need collator for sure! make tensors of batches + send them to the corresponding device
+    # TODO is default collator enough?

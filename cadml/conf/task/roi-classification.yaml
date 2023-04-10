@@ -1,4 +1,8 @@
 name: 'roi-classification'
-zero_class_weight: 0.15
+accelerator: gpu
+devices: 1
+positive_class_weight: 10.0
 learning_rate: 0.001
 weight_decay: 0.01
+max_epochs: 50
+decision_threshold: 0.5  # all probs above this will be considered positive
