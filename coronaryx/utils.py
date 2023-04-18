@@ -1,3 +1,5 @@
+from typing import List
+
 from pathlib import Path
 import pickle
 
@@ -7,7 +9,7 @@ from PIL import Image
 from coronaryx.data import CoronagraphyScan, ROI
 
 
-def read_dataset(dataset_dir: str):
+def read_dataset(dataset_dir: str) -> List[CoronagraphyScan]:
     dataset_dir = Path(dataset_dir)
 
     items = []
