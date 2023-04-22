@@ -7,7 +7,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 
 from cadml.datamodules import ROIClassificationDataModule
-from cadml.models import SimpleCNN
+from cadml.models import SimpleCNN, ResNet
 from cadml.tasks import ROIClassificationTask
 from cadml.callbacks import MetricsLoggingCallback
 
@@ -40,7 +40,7 @@ def train(cfg: DictConfig, datamodule: pl.LightningDataModule, task: pl.Lightnin
         monitor="f1",
         mode="max",
         dirpath="output/",
-        filename="cad-{epoch:03d}-{f1_weighted:.4f}",  # TODO better path? maybe specified in the config
+        filename="cad-{epoch:03d}-{f1:.4f}",  # TODO better path? maybe specified in the config
     )
     # wandb_logger = WandbLogger(project="???")
     trainer = pl.Trainer(
@@ -52,6 +52,7 @@ def train(cfg: DictConfig, datamodule: pl.LightningDataModule, task: pl.Lightnin
         callbacks=[MetricsLoggingCallback(), checkpoint_callback],
         # fast_dev_run=True,
         # overfit_batches=10,
+        # profiler='advanced',
     )
     # if no checkpoint_path is passed, then it is None, thus the model will start from the very beginning
     trainer.fit(task, datamodule=datamodule, ckpt_path=cfg.model.checkpoint_path)
@@ -81,6 +82,8 @@ def main(cfg: DictConfig):
 
     if cfg.model.name == 'simple-cnn':
         model = SimpleCNN(cfg)
+    elif cfg.model.name == 'resnet':
+        model = ResNet(cfg)
     else:
         raise ValueError('unknown model, can be either `simple-cnn` or ...')
 

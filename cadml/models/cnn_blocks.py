@@ -27,8 +27,3 @@ class SimpleCNNBlock(nn.Module):
             TensorType["batch_size", "channels", "height", "width"]:
 
         return self.block(X)
-
-
-class ResNetCNNBlock(nn.Module):
-    pass
-    # TODO
