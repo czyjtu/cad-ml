@@ -23,6 +23,7 @@ class ROIClassificationDataset(Dataset):
             dataset: list[cx.VesselBranch],
             size: int = 32,
             required_positive_overlap: float = 0.5,  # FIXME not used currently! do we need it? is anchor enough?
+            upsample_positive_examples: bool = False,
             train_transform: bool = True,
             transform_size_mean: float = 0.0,
             transform_size_std: float = 3.0,
@@ -34,6 +35,7 @@ class ROIClassificationDataset(Dataset):
         :param dataset: list of vessel branches objects
         :param size: size of the output images
         :param required_positive_overlap: minimum overlap with positive ROI required to be considered a positive example
+        :param upsample_positive_examples: upsample the number of positive examples to the number of negative ones
         :param train_transform: apply data augmentation techniques
         :param transform_size_mean: mean of generated eps (we cut out picture of size `size + eps` from the original
                                                             and then resize it to `size`)
@@ -49,7 +51,6 @@ class ROIClassificationDataset(Dataset):
         self.transform_size_mean = transform_size_mean
         self.transform_size_std = transform_size_std
 
-        # TODO transformations on the original image? background tweaking? noise?
         self.dataset = [
             {
                 'branch_obj': branch,  # VesselBranch
@@ -57,17 +58,29 @@ class ROIClassificationDataset(Dataset):
                 'angle': 0.0,  # float
                 'size': size,  # int
                 'mirrored': False,  # bool
-                # TODO another transformations
+                # TODO another transformations? background tweaking? noise?
             }
             for branch in dataset
             for anchor in cxa.traverse_branch_nodes(branch)
+        ]
+
+        self.upsample_positive_examples = upsample_positive_examples
+        self.positive_examples = [
+            anchor
+            for anchor in self.dataset
+            if anchor['branch_obj'].scan.in_any_roi(anchor['anchor'])
+        ]
+        self.negative_examples = [
+            anchor
+            for anchor in self.dataset
+            if not anchor['branch_obj'].scan.in_any_roi(anchor['anchor'])
         ]
 
     def _transform(self, item: dict[str, Any]) -> dict[str, Any]:
         return {
             'branch_obj': item['branch_obj'],
             'anchor': item['anchor'],
-            'angle': np.random.uniform(0, 2 * np.pi),
+            'angle': np.random.uniform(0, 2 * np.pi),  # TODO what if the angle will always match the angle of vector (vessel will lay horizontally)?
             'size': item['size'] + self.transform_size_mean + self.transform_size_std * np.random.randn(),
             'mirrored': np.random.random() < 0.5,
         }
@@ -104,10 +117,18 @@ class ROIClassificationDataset(Dataset):
         return torch.tensor(rotated, dtype=torch.float32).unsqueeze(0), label
 
     def __len__(self) -> int:
+        if self.upsample_positive_examples:
+            return 2 * len(self.negative_examples)
         return len(self.dataset)
 
-    def __getitem__(self, idx) -> tuple[TensorType["in_channels", "height", "width"], int]:
-        item = self.dataset[idx]
+    def __getitem__(self, idx: int) -> tuple[TensorType["in_channels", "height", "width"], int]:
+        # this ensures that each example will appear at least once in the epoch
+        if idx < len(self.dataset):
+            item = self.dataset[idx]
+        # for all the rest we sample from the positive examples
+        else:
+            item = random.choice(self.positive_examples)
+
         if self.train_transform:
             item = self._transform(item)
         return self._materialize_item(item)
@@ -143,7 +164,7 @@ class ROIClassificationDataModule(pl.LightningDataModule):
                 branch
                 for scan in dataset
                 for branch in cxa.split_into_branches(scan)
-            ])
+            ], upsample_positive_examples=self.cfg.datamodule.upsample_positive_examples)
 
         if stage is None or stage == 'val':
             dataset = cx.read_dataset(self.cfg.datamodule.val_dir)

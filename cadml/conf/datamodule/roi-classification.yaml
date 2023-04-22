@@ -7,4 +7,5 @@ train_dir: 'data'
 val_dir: 'data'
 test_dir: 'data'
 predict_dir: 'data'
+upsample_positive_examples: yes
 # TODO add hparams for data transformations
