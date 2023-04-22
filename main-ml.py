@@ -40,7 +40,7 @@ def train(cfg: DictConfig, datamodule: pl.LightningDataModule, task: pl.Lightnin
         monitor="f1",
         mode="max",
         dirpath="output/",
-        filename="cad-{epoch:03d}-{f1:.4f}",  # TODO better path? maybe specified in the config
+        filename=f"cad-{cfg.model.name}-{{epoch:03d}}-{{f1:.4f}}",  # TODO better path? maybe specified in the config
     )
     # wandb_logger = WandbLogger(project="???")
     trainer = pl.Trainer(
