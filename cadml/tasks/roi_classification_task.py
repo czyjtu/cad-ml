@@ -55,8 +55,7 @@ class ROIClassificationTask(pl.LightningModule):
         }
 
     def validation_step(self, batch, batch_idx):
-        with torch.no_grad():
-            pred, gold, loss = self.common_step(batch)
+        pred, gold, loss = self.common_step(batch)
         self.log('val_loss', loss, batch_size=len(pred))
         return {
             'pred': pred,
@@ -64,21 +63,21 @@ class ROIClassificationTask(pl.LightningModule):
         }
 
     def test_step(self, batch, batch_idx):
-        with torch.no_grad():
-            pred, gold, loss = self.common_step(batch)
+        pred, gold, loss = self.common_step(batch)
         self.log('test_loss', loss)
+        return {
+            'pred': pred,
+            'gold': gold
+        }
 
-    # FIXME shouldn't it be validation_step_end instead? https://pytorch-lightning.readthedocs.io/en/stable/common/lightning_module.html#validating-with-dataparallel
-    def validation_epoch_end(self, validation_step_outputs: list[dict[str, Any]]) -> None:
+    def _eval_epoch_end(self, outputs: list[dict[str, Any]]) -> None:
         # flattening outputs from dataloaders if there are multiple
-        if validation_step_outputs and isinstance(validation_step_outputs[0], list):
+        if outputs and isinstance(outputs[0], list):
             outputs = [
                 step_output
-                for dataloader_output in validation_step_outputs
+                for dataloader_output in outputs
                 for step_output in dataloader_output
             ]
-        else:
-            outputs = validation_step_outputs
 
         preds_prob: torch.Tensor = torch.tensor([pred for step_output in outputs for pred in step_output['pred']])
         preds: torch.Tensor = torch.where(preds_prob >= self.hparams.task.decision_threshold, 1, 0)
@@ -87,14 +86,14 @@ class ROIClassificationTask(pl.LightningModule):
         preds_numpy = preds.cpu().numpy()
         golds_numpy = golds.cpu().numpy()
 
-        # FIXME remove this debug after works alright
-        rank_zero_info('')
-        rank_zero_info(f'tp: {np.sum(np.where(golds_numpy != 0, preds_numpy == golds_numpy, False))}')
-        rank_zero_info(f'nonzero count:, {np.count_nonzero(preds_numpy)}')
-        rank_zero_info(f'preds_prob: {preds_prob[0]}')
-
         metrics = calculate_metrics(preds_numpy, golds_numpy)
         self.log_dict(metrics, on_epoch=True)
+
+    def validation_epoch_end(self, validation_epoch_outputs: list[dict[str, Any]]) -> None:
+        return self._eval_epoch_end(validation_epoch_outputs)
+
+    def test_epoch_end(self, test_epoch_outputs: list[dict[str, Any]]) -> None:
+        return self._eval_epoch_end(test_epoch_outputs)
 
     def configure_optimizers(self):
         # optimizer = torch.optim.AdamW(

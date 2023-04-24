@@ -18,29 +18,13 @@ logger = logging.getLogger(__name__)
 def train(cfg: DictConfig, datamodule: pl.LightningDataModule, task: pl.LightningModule):
     datamodule.setup()
 
-   # trainer = pl.Trainer(accelerator=cfg.trainer.accelerator, devices=1, max_epochs=cfg.trainer.max_epochs)
-
-   # lr_finder = trainer.tuner.lr_find(model)
-
-    # Results can be found in
-   # lr_finder.results
-
-    # Plot with
-#    fig = lr_finder.plot(suggest=True)
-#    fig.show()
-
-    # Pick point based on plot, or get suggestion
-#    new_lr = lr_finder.suggestion()
-#    print(new_lr)
-
-    # TODO select callbacks based on config?
-
+    # TODO add metrics writing to the checkpoint??
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         save_top_k=3,
         monitor="f1",
         mode="max",
         dirpath="output/",
-        filename=f"cad-{cfg.model.name}-{{epoch:03d}}-{{f1:.4f}}",  # TODO better path? maybe specified in the config
+        filename=f"cad-{cfg.model.name}-{{epoch:03d}}-{{f1:.4f}}",
     )
     # wandb_logger = WandbLogger(project="???")
     trainer = pl.Trainer(
@@ -56,11 +40,20 @@ def train(cfg: DictConfig, datamodule: pl.LightningDataModule, task: pl.Lightnin
     )
     # if no checkpoint_path is passed, then it is None, thus the model will start from the very beginning
     trainer.fit(task, datamodule=datamodule, ckpt_path=cfg.model.checkpoint_path)
+    trainer.test(task, datamodule=datamodule, ckpt_path='best')
 
 
 def evaluate(cfg: DictConfig, datamodule: pl.LightningDataModule, task: pl.LightningModule):
+    if cfg.model.checkpoint_path is None:
+        raise ValueError('no checkpoint path has been passed')
+
     datamodule.setup('test')
-    raise NotImplementedError()
+
+    trainer = pl.Trainer(
+        accelerator=cfg.task.accelerator,
+        devices=cfg.task.devices,
+    )
+    trainer.test(task, datamodule=datamodule, ckpt_path=cfg.model.checkpoint_path)
 
 
 def inference(cfg: DictConfig, datamodule: pl.LightningDataModule, task: pl.LightningModule):

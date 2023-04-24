@@ -216,6 +216,3 @@ class ROIClassificationDataModule(pl.LightningDataModule):
                           batch_size=self.predict_batch_size,
                           shuffle=False,
                           num_workers=3)
-
-    # TODO we need collator for sure! make tensors of batches + send them to the corresponding device
-    # TODO is default collator enough?

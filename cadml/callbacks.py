@@ -9,5 +9,6 @@ class MetricsLoggingCallback(pl.Callback):
         f1 = trainer.callback_metrics['f1']
         support = int(trainer.callback_metrics['support'])
 
+        rank_zero_info('V')  # fixes the overwriting of the progress bar, maybe there is a better way to do this
         rank_zero_info(f'metrics // precision: {100*precision:.4f}, recall: {100*recall:.4f}, '
                        f'f1: {100*f1:.4f}, support: {support}')

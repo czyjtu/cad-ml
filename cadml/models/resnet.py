@@ -20,6 +20,7 @@ class ResNet(nn.Module):
         self.model.fc = nn.Linear(embedding_size, 1)
 
     def forward(self, X: TensorType["batch_size", "channels", "height", "width"]) -> TensorType["batch_size"]:
+        # TODO try out: make 1st channel as the roi a little to the left, and 3rd channel as the roi a little to the right
         X = X.repeat(1, 3, 1, 1)  # increases the number of in_channels to 3
         # TODO resize? normalize?
         logits = self.model(X)
