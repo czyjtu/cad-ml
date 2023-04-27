@@ -7,7 +7,7 @@ from PIL import Image
 from coronaryx.data import CoronagraphyScan, ROI
 
 
-def read_dataset(dataset_dir: str):
+def read_dataset(dataset_dir: str) -> list[CoronagraphyScan]:
     dataset_dir = Path(dataset_dir)
 
     items = []
@@ -24,8 +24,11 @@ def read_dataset(dataset_dir: str):
             centerline = pickle.load(f)
 
         # vessel mask
-        mask_img = Image.open(item_dir / 'segmentation.png')
-        mask = np.array(mask_img)[:, :, 0] == 253
+        mask_img = np.array(Image.open(item_dir / 'segmentation.png'))
+        if mask_img.ndim == 3:
+            mask = mask_img[:, :, 0] == 253
+        else:
+            mask = mask_img
 
         # roi
         with open(item_dir / 'roi.p', 'rb') as f:

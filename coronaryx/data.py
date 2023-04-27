@@ -37,9 +37,12 @@ class VesselBranch:
 
     def __post_init__(self):
         # TODO some kind of deterministic sorting? preferably from the vessel start to the end
+        assert self.branch.number_of_nodes() >= 2, \
+            f'number of nodes in the branch must be at least 2, current is {self.branch.number_of_nodes()}'
         self._boundary_nodes: tuple[Any, Any] = \
             tuple([node for node in self.branch.nodes if len(self.branch[node]) == 1])
-        assert len(self._boundary_nodes) == 2
+        assert len(self._boundary_nodes) == 2, \
+            f'number of boundary nodes is equal to {len(self._boundary_nodes)}, but must be 2'
 
     @property
     def boundary_nodes(self) -> tuple[Any, Any]:

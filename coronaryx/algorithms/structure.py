@@ -24,4 +24,8 @@ def split_into_branches(scan: CoronagraphyScan) -> list[VesselBranch]:
                 if bn_neighbor in component:
                     subgraph.add_edge(branching_node, bn_neighbor)
 
-    return [VesselBranch(scan, branch) for branch in branches]
+    return [
+        VesselBranch(scan, branch)
+        for branch in branches
+        if branch.number_of_nodes() >= 2
+    ]
