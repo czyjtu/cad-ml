@@ -1,3 +1,4 @@
 from coronaryx.algorithms.traverse import traverse_branch_edges, traverse_branch_nodes
 from coronaryx.algorithms.structure import split_into_branches
 from coronaryx.algorithms.extraction import sweep
+from coronaryx.algorithms.segmentation import chan_vese_mask
