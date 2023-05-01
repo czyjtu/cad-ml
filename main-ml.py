@@ -26,7 +26,7 @@ def train(cfg: DictConfig, datamodule: pl.LightningDataModule, task: pl.Lightnin
         dirpath="output/",
         filename=f"cad-{cfg.model.name}-{{epoch:03d}}-{{f1:.4f}}",
     )
-    # wandb_logger = WandbLogger(project="???")
+    wandb_logger = WandbLogger(project="cad-ml")
     trainer = pl.Trainer(
         accelerator=cfg.task.accelerator,
         # logger=wandb_logger,

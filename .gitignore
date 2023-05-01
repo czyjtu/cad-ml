@@ -132,3 +132,4 @@ dmypy.json
 output
 outputs
 lightning_logs
+wandb
