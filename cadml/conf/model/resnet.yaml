@@ -1,0 +1,5 @@
+name: 'resnet'
+in_channels: 1
+use_pretrained: yes
+checkpoint_path: null
+# TODO other hparams

@@ -5,18 +5,18 @@ from scipy.interpolate import interp2d
 
 def interp_matrix(
         matrix: np.ndarray,
-        xs: float | np.ndarray['n', float],
-        ys: float | np.ndarray['n', float],
+        xs: float | np.ndarray['...', float],
+        ys: float | np.ndarray['...', float],
         kind: str = 'linear'
-) -> float | np.ndarray:
+) -> float | np.ndarray['...', float]:
     """
     Interpolates matrix values and allows using float indices.
 
     :param matrix: 2d numpy ndarray
-    :param xs: float index or a vector of float indices (first dimension)
-    :param ys: float index or a vector of float indices (second dimension)
+    :param xs: float index or ndarray of float indices (first dimension)
+    :param ys: float index or ndarray of float indices (second dimension)
     :param kind: interpolation method: {'linear', 'cubic', 'quintic'}
-    :return: interpolated float value or a vector of interpolated float values
+    :return: interpolated float value or ndarray of the same shape of the interpolated float values
     """
 
     if matrix.ndim != 2:
@@ -37,8 +37,9 @@ def interp_matrix(
     if xs.shape == tuple():
         return interp(ys, xs)
 
+    # TODO a place for optimization?
     interpolated = []
-    for x, y in zip(xs, ys):
+    for x, y in zip(xs.flatten(), ys.flatten()):
         interpolated.append(interp(y, x))
 
     # FIXME vectorized way sorts the input, and I don't know how to map it to the original

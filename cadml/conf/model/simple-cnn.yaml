@@ -1,0 +1,4 @@
+name: 'simple-cnn'
+in_channels: 1
+checkpoint_path: null
+# TODO other hparams
