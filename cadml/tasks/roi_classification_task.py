@@ -105,6 +105,7 @@ class ROIClassificationTask(pl.LightningModule):
             self.parameters(),
             lr=self.hparams.task.learning_rate,
             weight_decay=self.hparams.task.weight_decay,
-            momentum=0.9
+            momentum=self.hparams.task.momentum,
+            nesterov=self.hparams.task.nesterov
         )
         return optimizer

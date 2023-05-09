@@ -19,17 +19,17 @@ def train(cfg: DictConfig, datamodule: pl.LightningDataModule, task: pl.Lightnin
     datamodule.setup()
 
     # TODO add metrics writing to the checkpoint??
+    wandb_logger = WandbLogger(project="cad-ml")
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         save_top_k=3,
         monitor="f1",
         mode="max",
         dirpath="output/",
-        filename=f"cad-{cfg.model.name}-{{epoch:03d}}-{{f1:.4f}}",
+        filename=f"cad-{cfg.model.name}-{wandb_logger.experiment.name}-{{epoch:03d}}-{{f1:.4f}}",
     )
-    wandb_logger = WandbLogger(project="cad-ml")
     trainer = pl.Trainer(
         accelerator=cfg.task.accelerator,
-        # logger=wandb_logger,
+        logger=wandb_logger,
         devices=cfg.task.devices,
         max_epochs=cfg.task.max_epochs,
         # default_root_dir='output',
