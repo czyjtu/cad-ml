@@ -32,10 +32,14 @@ class CoronagraphyScan:
         return any([item in roi for roi in self.rois])
 
     def crop_at(
-        self, anchor: tuple[int, int], size: int
+        self, anchor: tuple[int, int], size: int, apply_segmentation_mask: bool = False
     ) -> np.ndarray["size, size", np.uint8]:
         row, col = anchor
         offset = size // 2
+        scan = self.scan.copy()
+        if apply_segmentation_mask:
+            scan[self.vessel_mask == False] = 0.0
+
         if (
             row - offset < 0
             or col - offset < 0
@@ -50,16 +54,16 @@ class CoronagraphyScan:
             # return interpolated
 
             # padding
-            h, w = self.scan.shape
+            h, w = scan.shape
             padded = np.zeros(
                 (w + 2 * size, h + 2 * size), dtype=self.scan.dtype
             )  # TODO: no need to copy entire image. Make it more efficient
-            padded[size:-size, size:-size] = self.scan
+            padded[size:-size, size:-size] = scan
             row += size
             col += size
             return padded[row - offset : row + offset, col - offset : col + offset]
 
-        return self.scan[row - offset : row + offset, col - offset : col + offset]
+        return scan[row - offset : row + offset, col - offset : col + offset]
 
 
 @dataclass

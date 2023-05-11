@@ -8,13 +8,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 from torchtyping import TensorType
 import torch as th
-from torchvision.transforms import (
-    Compose,
-    RandomHorizontalFlip,
-    RandomVerticalFlip,
-    RandomRotation,
-    ToTensor,
-)
+import torchvision.transforms as tvt
 import pytorch_lightning as pl
 from pytorch_lightning.utilities.types import TRAIN_DATALOADERS, EVAL_DATALOADERS
 
@@ -31,6 +25,7 @@ class ROIClassificationDataset(Dataset):
         transforms: Optional[Any] = None,
         size: int = 32,
         upsample_positive_examples: bool = False,
+        apply_segmentation_mask: bool = False,
     ):
         """
         PyTorch Dataset based on the angiograms, extracting images along the vessels, labeling stenosis,
@@ -59,12 +54,16 @@ class ROIClassificationDataset(Dataset):
                     "mirrored": False,  # bool
                     # TODO another transformations? background tweaking? noise?
                 }
-                images.append(branch.scan.crop_at(anchor, size))
+                images.append(
+                    branch.scan.crop_at(
+                        anchor, size, apply_segmentation_mask=apply_segmentation_mask
+                    )
+                )
                 labels.append(int(branch.scan.in_any_roi(anchor)))
                 self.items.append(item)
         self.images = np.array(images, dtype=np.float32)
         self.labels = np.array(labels, dtype=np.byte)
-        self.transforms = transforms or ToTensor()
+        self.transforms = transforms or tvt.ToTensor()
 
     def __len__(self) -> int:
         if self.upsample_positive_examples:
@@ -105,16 +104,26 @@ class ROIClassificationDataModule(pl.LightningDataModule):
     def prepare_data(self) -> None:
         pass
 
+    def get_transforms(self, allow_padding: bool, roi_size: int) -> Any:
+        transforms = [
+            tvt.ToTensor(),
+            tvt.RandomHorizontalFlip(p=0.5),
+            tvt.RandomVerticalFlip(p=0.5),
+            tvt.RandomRotation(degrees=180),
+        ]
+        if not allow_padding:
+            transforms.append(tvt.CenterCrop(roi_size))
+        return tvt.Compose(transforms)
+
     def setup(self, stage: Optional[str] = None) -> None:
         if stage is None or stage == "train":
-            train_transforms = Compose(
-                [
-                    ToTensor(),
-                    RandomHorizontalFlip(p=0.5),
-                    RandomVerticalFlip(p=0.5),
-                    RandomRotation(degrees=180),
-                ]
+            transforms = self.get_transforms(
+                allow_padding=self.cfg.datamodule.allow_padding,
+                roi_size=self.cfg.datamodule.roi_size,
             )
+            raw_roi_size = self.cfg.datamodule.roi_size
+            if not self.cfg.datamodule.allow_padding:
+                raw_roi_size = np.ceil(raw_roi_size * np.sqrt(2)).astype(int)
             dataset = cx.read_dataset(self.cfg.datamodule.train_dir)
 
             self.train_dataset = ROIClassificationDataset(
@@ -124,7 +133,9 @@ class ROIClassificationDataModule(pl.LightningDataModule):
                     for branch in cxa.split_into_branches(scan)
                 ],
                 upsample_positive_examples=self.cfg.datamodule.upsample_positive_examples,
-                transforms=train_transforms,
+                transforms=transforms,
+                size=raw_roi_size,
+                apply_segmentation_mask=self.cfg.datamodule.apply_segmentation_mask,
             )
 
         if stage is None or stage == "val":
