@@ -7,5 +7,8 @@ train_dir: 'data'
 val_dir: 'data'
 test_dir: 'data'
 predict_dir: 'data'
-upsample_positive_examples: yes
+upsample_positive_examples: true
+allow_padding: false
+apply_segmentation_mask: false
+roi_size: 32
 # TODO add hparams for data transformations
