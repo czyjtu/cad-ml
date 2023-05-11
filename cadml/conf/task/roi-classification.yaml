@@ -1,10 +1,10 @@
 name: 'roi-classification'
 accelerator: gpu
 devices: 1
-positive_class_weight: 100.0
+positive_class_weight: 1.0
 learning_rate: 0.001
 weight_decay: 0.01
 momentum: 0.9
 nesterov: false
-max_epochs: 50
+max_epochs: 200
 decision_threshold: 0.5  # all probs above this will be considered positive
