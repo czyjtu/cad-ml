@@ -136,3 +136,6 @@ output
 outputs
 lightning_logs
 wandb
+
+splitted
+splitted.zip

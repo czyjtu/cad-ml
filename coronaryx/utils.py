@@ -9,7 +9,7 @@ from PIL import Image
 from coronaryx.data import CoronagraphyScan, ROI
 
 
-def read_dataset(dataset_dir: str) -> list[CoronagraphyScan]:
+def read_dataset(dataset_dir: str | Path) -> list[CoronagraphyScan]:
     dataset_dir = Path(dataset_dir)
 
     items = []
@@ -30,7 +30,7 @@ def read_dataset(dataset_dir: str) -> list[CoronagraphyScan]:
         if mask_img.ndim == 3:
             mask = mask_img[:, :, 0] == 253
         else:
-            mask = mask_img
+            mask = mask_img.astype(bool)
 
         # roi
         with open(item_dir / 'roi.p', 'rb') as f:
@@ -51,3 +51,66 @@ def read_dataset(dataset_dir: str) -> list[CoronagraphyScan]:
         )
         items.append(item)
     return items
+
+
+def save_dataset(dataset: list[CoronagraphyScan], output_dir: str | Path) -> None:
+    output_dir = Path(output_dir)
+
+    for item in dataset:
+        item_dir = output_dir / item.name
+        item_dir.mkdir(parents=True, exist_ok=True)
+
+        # scan
+        with open(item_dir / 'representative_frame.p', 'wb') as f:
+            pickle.dump(item.scan, f)
+
+        # centerline
+        with open(item_dir / 'centreline.p', 'wb') as f:
+            pickle.dump(item.centerline, f)
+
+        # vessel mask
+        Image.fromarray(item.vessel_mask).save(item_dir / 'segmentation.png')
+
+        # roi
+        roi_list = []
+        for roi in item.rois:
+            roi_list.append({
+                'start': {'x': roi.start_x, 'y': roi.start_y},
+                'end':   {'x': roi.end_x,   'y': roi.end_y},
+            })
+        with open(item_dir / 'roi.p', 'wb') as f:
+            pickle.dump(roi_list, f)
+
+
+def train_dev_test_split(
+        dataset: list[CoronagraphyScan],
+        dev_size: float = 0.15,
+        test_size: float = 0.15
+) -> tuple[list[CoronagraphyScan], list[CoronagraphyScan], list[CoronagraphyScan]]:
+
+    assert 0.0 <= dev_size < 1.0
+    assert 0.0 <= test_size < 1.0
+    assert dev_size + test_size < 1.0
+
+    positive_n = sum([len(item.rois) for item in dataset])
+
+    dev_size = int(dev_size * positive_n)
+    test_size = int(test_size * positive_n)
+    train_size = positive_n - dev_size - test_size
+
+    train_dataset: List[CoronagraphyScan] = []
+    dev_dataset: List[CoronagraphyScan] = []
+    test_dataset: List[CoronagraphyScan] = []
+
+    for item in dataset:
+        if train_size > 0:
+            train_dataset.append(item)
+            train_size -= len(item.rois)
+        elif dev_size > 0:
+            dev_dataset.append(item)
+            dev_size -= len(item.rois)
+        else:
+            test_dataset.append(item)
+            test_size -= len(item.rois)
+
+    return train_dataset, dev_dataset, test_dataset
