@@ -70,7 +70,7 @@ class ROIClassificationTask(pl.LightningModule):
             'gold': gold
         }
 
-    def _eval_epoch_end(self, outputs: list[dict[str, Any]]) -> None:
+    def _eval_epoch_end(self, outputs: list[dict[str, Any]], prefix: str = '') -> None:
         # flattening outputs from dataloaders if there are multiple
         if outputs and isinstance(outputs[0], list):
             outputs = [
@@ -87,13 +87,13 @@ class ROIClassificationTask(pl.LightningModule):
         golds_numpy = golds.cpu().numpy()
 
         metrics = calculate_metrics(preds_numpy, golds_numpy)
-        self.log_dict(metrics, on_epoch=True)
+        self.log_dict({prefix + k: v for k, v in metrics.items()}, on_epoch=True)
 
     def validation_epoch_end(self, validation_epoch_outputs: list[dict[str, Any]]) -> None:
         return self._eval_epoch_end(validation_epoch_outputs)
 
     def test_epoch_end(self, test_epoch_outputs: list[dict[str, Any]]) -> None:
-        return self._eval_epoch_end(test_epoch_outputs)
+        return self._eval_epoch_end(test_epoch_outputs, prefix='test_')
 
     def configure_optimizers(self):
         # optimizer = torch.optim.AdamW(
