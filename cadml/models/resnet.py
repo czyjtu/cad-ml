@@ -15,13 +15,19 @@ class ResNet(nn.Module):
         self.in_channels = cfg.model.in_channels
         self.use_pretrained = cfg.model.use_pretrained
 
-        self.model = models.resnet18(pretrained=self.use_pretrained)
+        weights = models.ResNet18_Weights.IMAGENET1K_V1
+        self.preprocess = weights.transforms()
+        if self.use_pretrained:
+            self.model = models.resnet18(weights=weights)
+        else:
+            self.model = models.resnet18(weights=None)
         embedding_size = self.model.fc.in_features
         self.model.fc = nn.Linear(embedding_size, 1)
 
     def forward(self, X: TensorType["batch_size", "channels", "height", "width"]) -> TensorType["batch_size"]:
-        # TODO try out: make 1st channel as the roi a little to the left, and 3rd channel as the roi a little to the right
         X = X.repeat(1, 3, 1, 1)  # increases the number of in_channels to 3
+        X = self.preprocess(X)
+        # TODO try out: make 1st channel as the roi a little to the left, and 3rd channel as the roi a little to the right
         # TODO resize? normalize?
         logits = self.model(X)
         return logits
