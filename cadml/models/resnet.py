@@ -15,12 +15,20 @@ class ResNet(nn.Module):
         self.in_channels = cfg.model.in_channels
         self.use_pretrained = cfg.model.use_pretrained
 
-        weights = models.ResNet18_Weights.IMAGENET1K_V1
+        if cfg.model.version == '18':
+            weights = models.ResNet18_Weights.IMAGENET1K_V1
+            model_class = models.resnet18
+        elif cfg.model.version == '50':
+            weights = models.ResNet50_Weights.IMAGENET1K_V1
+            model_class = models.resnet50
+        else:
+            raise ValueError('unknown model version, can be either `18` or `50`')
+
         self.preprocess = weights.transforms()
         if self.use_pretrained:
-            self.model = models.resnet18(weights=weights)
+            self.model = model_class(weights=weights)
         else:
-            self.model = models.resnet18(weights=None)
+            self.model = model_class(weights=None)
         embedding_size = self.model.fc.in_features
         self.model.fc = nn.Linear(embedding_size, 1)
 
