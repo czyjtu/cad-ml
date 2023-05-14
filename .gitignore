@@ -142,3 +142,6 @@ splitted.zip
 
 denoised
 preprocessed
+
+detection-dataset
+detection.yaml
