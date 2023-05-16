@@ -1,0 +1,11 @@
+name: 'object-detection'
+train_batch_size: 128
+val_batch_size: 128
+test_batch_size: 128
+predict_batch_size: 128
+image_folder: 'external-dataset/dataset'
+train_csv: 'external-dataset/train_labels.csv'
+val_dir: 'external-dataset/test_labels.csv'
+test_dir: 'external-dataset/test_labels.csv'
+predict_dir: 'external-dataset/test_labels.csv'
+# TODO add hparams for data transformations
