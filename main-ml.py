@@ -1,6 +1,7 @@
 import logging
 
 import hydra
+import matplotlib.pyplot as plt
 from omegaconf import DictConfig, OmegaConf
 
 import pytorch_lightning as pl
@@ -68,6 +69,22 @@ def inference(
     raise NotImplementedError()
 
 
+def explore(
+    cfg: DictConfig, datamodule: pl.LightningDataModule, task: pl.LightningModule
+):
+    datamodule.setup()
+    for idx in range(len(datamodule.train_dataset)):
+        image, label = datamodule.train_dataset[idx]
+        print(image)
+        plt.title(f'Label: {label}')
+        plt.imshow(image.squeeze(0), cmap="gray")
+        plt.show()
+
+    # from coronaryx import plot_scan, plot_branch
+    # for item in datamodule.train_dataset.original_dataset:
+    #     plot_branch(item)
+
+
 @hydra.main(config_path="cadml/conf", config_name="config", version_base=None)
 def main(cfg: DictConfig):
     print(OmegaConf.to_yaml(cfg))
@@ -100,6 +117,8 @@ def main(cfg: DictConfig):
         evaluate(cfg, datamodule, task)
     elif cfg.stage == "inference":
         inference(cfg, datamodule, task)
+    elif cfg.stage == 'explore':
+        explore(cfg, datamodule, task)
     else:
         raise ValueError(
             "unknown stage, can be either `train`, `evaluate` or `inference`"

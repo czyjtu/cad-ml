@@ -139,3 +139,11 @@ wandb
 
 splitted
 splitted.zip
+
+denoised
+preprocessed
+
+detection-dataset
+detection.yaml
+
+*.pth

@@ -1,6 +1,6 @@
-name: 'resnet'
+name: 'faster-rcnn'
 in_channels: 1
-version: '18'
+version: '2'
 use_pretrained: yes
 checkpoint_path: null
 # TODO other hparams
