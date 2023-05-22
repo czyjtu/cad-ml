@@ -145,3 +145,5 @@ preprocessed
 
 detection-dataset
 detection.yaml
+
+*.pth

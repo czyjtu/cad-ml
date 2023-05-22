@@ -3,6 +3,7 @@ from pathlib import Path
 from operator import attrgetter
 from typing import Optional, Any
 from tqdm import trange
+import csv
 
 import cv2
 import matplotlib.pyplot as plt
@@ -15,6 +16,81 @@ from torch.utils.data import Dataset
 from torchtyping import TensorType
 
 import coronaryx as cx
+
+
+class PascalVOCObjectDetectionDataset(Dataset):
+    def __init__(
+            self,
+            csv_file: str | Path,
+            images_folder: str | Path,
+            transforms: Optional[Any] = None,
+    ):
+        """
+        PyTorch Dataset based on the angiograms, which are stored in a folder and described in a CSV file.
+        The CSV file must contain the following columns: `filename`, `xmin`, `ymin`, `xmax`, `ymax`, `class`.
+        The `class` column must contain the class name as a string.
+        The `xmin`, `ymin`, `xmax`, `ymax` columns must contain the coordinates of the bounding box of the object in
+        the image.
+        The coordinates must be integers. The origin is in the top left corner of the image.
+
+        :param csv_file: path to the CSV file with the annotations
+        :param images_folder: path to the folder with the images
+        :param transforms: torchvision transforms to be applied to the images
+        """
+
+        self.images_folder = Path(images_folder)
+
+        with open(csv_file, 'r') as f:
+            reader = csv.DictReader(f)
+            stenosis_annotations = list(reader)
+
+        # annotations per image
+        self.annotations = dict()
+        for annotation in stenosis_annotations:
+            image_name = annotation['filename']
+            if image_name not in self.annotations:
+                self.annotations[image_name] = []
+            self.annotations[image_name].append(annotation)
+
+        self.image_names = sorted(self.annotations.keys())
+        self.transforms = transforms or tvt.ToTensor()
+
+    def __len__(self) -> int:
+        return len(self.annotations)
+
+    def __getitem__(
+            self, idx: int
+    ) -> tuple[TensorType["in_channels", "height", "width"], dict[str, Any]]:
+        # TODO can be rewritten using XML files https://www.kaggle.com/code/yerramvarun/fine-tuning-faster-rcnn-using-pytorch
+
+        image_name = self.image_names[idx]
+        image_path = self.images_folder / image_name
+        annotations = self.annotations[image_name]
+
+        image = cv2.imread(str(image_path))
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        wt, ht = image.shape[1], image.shape[0]
+        image = cv2.resize(image, (224, 224), cv2.INTER_AREA) / 255.0
+
+        boxes = torch.tensor([
+            [(int(a['xmin']) / wt) * 224, (int(a['ymin']) / ht) * 224, (int(a['xmax']) / wt) * 224,
+             (int(a['ymax']) / ht) * 224]
+            for a in annotations
+        ])
+
+        target = {
+            'boxes': boxes,
+            'labels': torch.ones((len(annotations),), dtype=torch.int64),
+            'image_id': torch.tensor([idx]),
+            'area': (boxes[:, 3] - boxes[:, 1]) * (boxes[:, 2] - boxes[:, 0]),
+            'iscrowd': torch.zeros((len(annotations),), dtype=torch.int64)
+        }
+
+        if self.transforms:
+            # TODO boxes are not transformed
+            image = self.transforms(image)
+
+        return image.to(torch.float64), target
 
 
 class CoronaryXObjectDetectionDataset(Dataset):
@@ -67,10 +143,10 @@ def apply_nms(orig_prediction, iou_thresh=0.3):
     # torchvision returns the indices of the bboxes to keep
     keep = torchvision.ops.nms(orig_prediction['boxes'], orig_prediction['scores'], iou_thresh)
 
-    final_prediction = orig_prediction
-    final_prediction['boxes'] = final_prediction['boxes'][keep]
-    final_prediction['scores'] = final_prediction['scores'][keep]
-    final_prediction['labels'] = final_prediction['labels'][keep]
+    final_prediction = dict()
+    final_prediction['boxes'] = orig_prediction['boxes'][keep].cpu()
+    final_prediction['scores'] = orig_prediction['scores'][keep].cpu()
+    final_prediction['labels'] = orig_prediction['labels'][keep].cpu()
 
     return final_prediction
 
@@ -84,13 +160,21 @@ if __name__ == '__main__':
     parser.add_argument('--iou_threshold', default=0.5, type=float, help='IoU threshold for evaluation')
     parser.add_argument('--score_threshold', default=0.5, type=float, help='score threshold to filter out all others')
     parser.add_argument('--show_examples', action='store_true', help='show examples with gold annotations and predictions')
+
+    parser.add_argument('--voc_dataset', action='store_true', help='use PascalVOC dataset instead of CoronaryX dataset')
+    parser.add_argument('--csv_file', help='path to csv file with annotations')
+    parser.add_argument('--images_folder', help='path to folder with images')
+
     args = parser.parse_args()
 
     device = torch.device(args.device)
     model = torch.load(args.checkpoint_path, map_location=device)
     model.eval()
 
-    dataset = CoronaryXObjectDetectionDataset(args.data_dir)
+    if args.voc_dataset:
+        dataset = PascalVOCObjectDetectionDataset(args.csv_file, args.images_folder)
+    else:
+        dataset = CoronaryXObjectDetectionDataset(args.data_dir)
 
     tps = 0
     fps = 0
@@ -101,7 +185,8 @@ if __name__ == '__main__':
 
     for idx in trange(len(dataset)):
         image, target = dataset[idx]
-        image = image.repeat(3, 1, 1)
+        # FIXME implement sending to gpu and back
+        image = image.repeat(3, 1, 1).to(device)
 
         with torch.no_grad():
             output = model([image])[0]
