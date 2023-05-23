@@ -120,7 +120,7 @@ def count_votes(
     Args:
         model: a trained model
         images: a batch of images
-        anchors: list of nachors inside each image
+        anchors: list of anchors inside each image
         batch: batch size to evaluate model
     Returns:
         votes: a batch of votes, one for each anchor

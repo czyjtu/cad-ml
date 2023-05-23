@@ -57,7 +57,7 @@ class ROIClassificationDataset(Dataset):
                 images.append(
                     branch.scan.crop_at(
                         anchor, size, apply_segmentation_mask=apply_segmentation_mask
-                    )
+                    ) / 255.0
                 )
                 labels.append(int(branch.scan.in_any_roi(anchor)))
                 self.items.append(item)
