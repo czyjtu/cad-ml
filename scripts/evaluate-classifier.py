@@ -7,6 +7,7 @@ import torch
 import torchvision
 from torch import nn
 
+import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -68,6 +69,11 @@ class ResNet(nn.Module):
         return logits
 
 
+# def are_chunks_connected(chunk1_mask: np.ndarray, chunk2_mask: np.ndarray, mask: np.ndarray):
+#     _, labeled_mask = cv2.connectedComponents(mask)
+#     return np.all(labeled_mask[chunk1_mask] == labeled_mask[chunk2_mask])
+
+
 if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('dataset_dir', help='Path to dataset directory')
@@ -75,6 +81,7 @@ if __name__ == '__main__':
     parser.add_argument('--device', default='cpu', help='Device to use')
     parser.add_argument('--decision_threshold', default=0.5, type=float, help='Decision threshold')
     parser.add_argument('--votes_threshold', default=3, type=int, help='Votes threshold')
+    parser.add_argument('--iou_threshold', default=0.2, type=float, help='IoU threshold')
     parser.add_argument('--show', action='store_true', help='Show images')
     args = parser.parse_args()
 
@@ -120,11 +127,12 @@ if __name__ == '__main__':
                     voting_map[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]] += 1
 
         voting_map = voting_map * item.vessel_mask
+        voting_map = np.clip(voting_map, 0, args.votes_threshold)
 
         if args.show:
             figure, ax = plt.subplots(1, 1)
             heatmap = np.zeros((item.scan.shape[0], item.scan.shape[1], 3), dtype=np.uint8)
-            heatmap[:, :, 0] = voting_map / np.max(voting_map) * 255
+            heatmap[:, :, 0] = voting_map / args.votes_threshold * 255
             # heatmap[:, :, 1] = item.vessel_mask * 255
             heatmap[:, :, 2] = item.scan
 
@@ -141,17 +149,63 @@ if __name__ == '__main__':
                 ax.add_patch(rect)
             plt.show()
 
+        # calculate chunks
+        chunks_count, chunks, stats, _ = cv2.connectedComponentsWithStats(
+            (voting_map >= args.votes_threshold).astype(np.uint8),
+            connectivity=4
+        )
+
+        chunk_ids = [chunk_id for chunk_id in range(1, chunks_count) if stats[chunk_id][cv2.CC_STAT_AREA] >= 100]
+
         for roi in item.rois:
-            votes = voting_map[int(roi.start_y):int(roi.end_y),
-                               int(roi.start_x):int(roi.end_x)]
-            max_votes = np.max(votes) if votes.size > 0 else 0
-            # print('max_votes', max_votes)
-            if max_votes >= args.votes_threshold:
+            roi_start_y = int(roi.start_y)
+            roi_end_y = int(roi.end_y)
+            roi_start_x = int(roi.start_x)
+            roi_end_x = int(roi.end_x)
+
+            roi_mask = np.zeros_like(item.vessel_mask, dtype=np.uint8)
+            roi_mask[roi_start_y:roi_end_y, roi_start_x:roi_end_x] = \
+                item.vessel_mask[roi_start_y:roi_end_y, roi_start_x:roi_end_x]
+
+            best_iou = 0.0
+            for chunk_id in chunk_ids:
+                chunk_mask = (chunks == chunk_id).astype(np.uint8)
+
+                # calculate intersection over union
+                intersection = np.sum(chunk_mask * roi_mask)
+                union = np.sum(chunk_mask + roi_mask > 0)
+                iou = intersection / union
+
+                best_iou = max(iou, best_iou)
+
+            if best_iou >= args.iou_threshold:
                 tps += 1
             else:
                 fns += 1
 
-        # FIXME add false positive calculating
+        for chunk_id in chunk_ids:
+            chunk_mask = (chunks == chunk_id).astype(np.uint8)
+
+            best_iou = 0.0
+            for roi in item.rois:
+                roi_start_y = int(roi.start_y)
+                roi_end_y = int(roi.end_y)
+                roi_start_x = int(roi.start_x)
+                roi_end_x = int(roi.end_x)
+
+                roi_mask = np.zeros_like(item.vessel_mask, dtype=np.uint8)
+                roi_mask[roi_start_y:roi_end_y, roi_start_x:roi_end_x] = \
+                    item.vessel_mask[roi_start_y:roi_end_y, roi_start_x:roi_end_x]
+
+                # calculate intersection over union
+                intersection = np.sum(chunk_mask * roi_mask)
+                union = np.sum(chunk_mask + roi_mask > 0)
+                iou = intersection / union
+
+                best_iou = max(iou, best_iou)
+
+            if best_iou < args.iou_threshold:
+                fps += 1
 
     recall = tps / (tps + fns) if tps > 0 else 0.0
     precision = tps / (tps + fps) if tps > 0 else 0.0
