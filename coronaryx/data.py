@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -14,6 +14,7 @@ class ROI:
     start_y: float
     end_x: float
     end_y: float
+    form: dict[str, Any] = field(default_factory=dict)
 
     def __contains__(self, item: tuple[int, int] | np.ndarray["2", float]) -> bool:
         y, x = item

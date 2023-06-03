@@ -1,12 +1,13 @@
 from typing import List
-
 from pathlib import Path
+from collections import Counter
 import pickle
 
 import numpy as np
-from PIL import Image
 import torch as th
-from collections import Counter
+import pydicom
+from PIL import Image
+
 from coronaryx.data import CoronagraphyScan, ROI
 
 
@@ -19,8 +20,14 @@ def read_dataset(dataset_dir: str | Path) -> list[CoronagraphyScan]:
             continue
 
         # scan
-        with open(item_dir / "representative_frame.p", "rb") as f:
-            scan = pickle.load(f)
+        if (item_dir / "representative_frame.p").exists():
+            with open(item_dir / "representative_frame.p", "rb") as f:
+                scan = pickle.load(f)
+        elif (item_dir / "representative_frame.dcm").exists():
+            with open(item_dir / "representative_frame.dcm", "rb") as f:
+                scan = pydicom.dcmread(f).pixel_array
+        else:
+            raise FileNotFoundError(f"Could not find representative frame for {item_dir.name}")
 
         # centerline
         with open(item_dir / "centreline.p", "rb") as f:
@@ -39,7 +46,7 @@ def read_dataset(dataset_dir: str | Path) -> list[CoronagraphyScan]:
 
         rois = []
         for d in roi_list:
-            roi = ROI(d["start"]["x"], d["start"]["y"], d["end"]["x"], d["end"]["y"])
+            roi = ROI(d["start"]["x"], d["start"]["y"], d["end"]["x"], d["end"]["y"], form=d.get("form", dict()))
             rois.append(roi)
 
         # adding
@@ -73,6 +80,7 @@ def save_dataset(dataset: list[CoronagraphyScan], output_dir: str | Path) -> Non
                 {
                     "start": {"x": roi.start_x, "y": roi.start_y},
                     "end": {"x": roi.end_x, "y": roi.end_y},
+                    "form": roi.form,
                 }
             )
         with open(item_dir / "roi.p", "wb") as f:
