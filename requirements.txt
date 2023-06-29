@@ -11,5 +11,4 @@ torch
 torchvision
 wandb
 omegaconf
-hydra
 
